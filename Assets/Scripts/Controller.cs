@@ -1,3 +1,4 @@
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 namespace ColdShowerGames {
@@ -50,7 +51,6 @@ namespace ColdShowerGames {
             if (!showGridGizmos) {
                 return;
             }
-            
             Gizmos.color = Color.green;
             if (Settings == null)
                 return;

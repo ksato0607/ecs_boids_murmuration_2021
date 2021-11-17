@@ -2,6 +2,7 @@
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using UnityEngine;
 namespace ColdShowerGames {
 
     public struct CopyAllPositions : IJob {
@@ -18,18 +19,22 @@ namespace ColdShowerGames {
 
     [BurstCompile]
     struct MergeCells : IJobNativeMultiHashMapMergedSharedKeyIndices {
-        [ReadOnly] public NativeArray<float3> positions;
-        [ReadOnly] public NativeArray<float3> headings;
-        
+        [ReadOnly]
+        public NativeArray<float3> positions;
+        [ReadOnly]
+        public NativeArray<float3> headings;
+
+        [ReadOnly]
+        public NativeArray<float3> targetPositions;
+
         public NativeArray<int> perBoidCellIndex;
         public NativeArray<float3> perCellHeadings;
         public NativeArray<float3> perCellPositions;
         // public NativeArray<int> cellObstaclePositionIndex;
         // public NativeArray<float> cellObstacleDistance;
-        // public NativeArray<int> cellTargetPositionIndex;
+        public NativeArray<int> perCellClosestTargetIndex;
+        public NativeArray<float> perCellClosestTargetDistanceSq;
         public NativeArray<int> perCellCount;
-        // [ReadOnly]
-        // public NativeArray<float3> targetPositions;
         // [ReadOnly]
         // public NativeArray<float3> obstaclePositions;
 
@@ -37,19 +42,18 @@ namespace ColdShowerGames {
             NativeArray<float3> targets,
             float3 position,
             out int nearestPositionIndex,
-            out float nearestDistance) {
-            
+            out float nearestDistanceSq) {
+
             nearestPositionIndex = 0;
-            nearestDistance = math.lengthsq(position - targets[0]);
+            nearestDistanceSq = math.lengthsq(position - targets[0]);
             for (int i = 1; i < targets.Length; i++) {
                 var targetPosition = targets[i];
                 var distance = math.lengthsq(position - targetPosition);
-                var nearest = distance < nearestDistance;
+                var nearest = distance < nearestDistanceSq;
 
-                nearestDistance = math.select(nearestDistance, distance, nearest);
+                nearestDistanceSq = math.select(nearestDistanceSq, distance, nearest);
                 nearestPositionIndex = math.select(nearestPositionIndex, i, nearest);
             }
-            nearestDistance = math.sqrt(nearestDistance);
         }
 
         // Resolves the distance of the nearest obstacle and target and stores the cell index.
@@ -62,10 +66,17 @@ namespace ColdShowerGames {
             // cellObstaclePositionIndex[index] = obstaclePositionIndex;
             // cellObstacleDistance[index] = obstacleDistance;
             //
-            // int targetPositionIndex;
-            // float targetDistance;
-            // NearestPosition(targetPositions, position, out targetPositionIndex, out targetDistance);
-            // cellTargetPositionIndex[index] = targetPositionIndex;
+            if (targetPositions.Length != 0) {
+                NearestPosition(targetPositions,
+                    positions[index],
+                    out var targetPositionIndex,
+                    out var targetDistanceSq);
+                perCellClosestTargetIndex[index] = targetPositionIndex;
+                perCellClosestTargetDistanceSq[index] = targetDistanceSq;
+            }
+            else {
+                perCellClosestTargetIndex[index] = -1;
+            }
 
             perBoidCellIndex[index] = index;
             perCellCount[index] = 1;

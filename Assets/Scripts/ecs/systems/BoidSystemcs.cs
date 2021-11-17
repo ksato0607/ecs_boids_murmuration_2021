@@ -1,14 +1,17 @@
 ﻿using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
 namespace ColdShowerGames {
 
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(TransformSystemGroup))]
     public class BoidSystem : SystemBase {
         private EntityQuery _boidQuery;
+        private EntityQuery _targetsQuery;
         private readonly List<Boid> _boidTypes = new();
 
 
@@ -16,7 +19,11 @@ namespace ColdShowerGames {
             base.OnStartRunning();
             _boidQuery = GetEntityQuery(ComponentType.ReadOnly<Boid>(),
                 ComponentType.ReadWrite<LocalToWorld>());
+            _targetsQuery = GetEntityQuery(ComponentType.ReadOnly<BoidTarget>(),
+                ComponentType.ReadOnly<LocalToWorld>());
+
             RequireForUpdate(_boidQuery);
+            RequireForUpdate(_targetsQuery);
         }
 
         protected override void OnUpdate() {
@@ -30,6 +37,7 @@ namespace ColdShowerGames {
             foreach (var boidType in _boidTypes) {
                 _boidQuery.AddSharedComponentFilter(boidType);
                 var nrOfBoids = _boidQuery.CalculateEntityCount();
+                var nrOfTargets = _targetsQuery.CalculateEntityCount();
 
                 if (nrOfBoids == 0) {
                     _boidQuery.ResetFilter();
@@ -72,11 +80,31 @@ namespace ColdShowerGames {
                     Allocator.TempJob,
                     NativeArrayOptions.UninitializedMemory);
 
+                // positions of all targets
+                var targetPositions = new NativeArray<float3>(nrOfTargets,
+                    Allocator.TempJob,
+                    NativeArrayOptions.UninitializedMemory);
+
+                // radius to avoid this target
+                var targetAvoidanceRanges = new NativeArray<float>(nrOfTargets,
+                    Allocator.TempJob,
+                    NativeArrayOptions.UninitializedMemory);
+
+                // per each cell, this is the position of the closes target
+                var perCellClosestTargetIndex = new NativeArray<int>(nrOfBoids,
+                    Allocator.TempJob,
+                    NativeArrayOptions.UninitializedMemory);
+
+                // per each cell, this is the position of the closes target
+                var perCellClosestTargetDistanceSq = new NativeArray<float>(nrOfBoids,
+                    Allocator.TempJob,
+                    NativeArrayOptions.UninitializedMemory);
+
   #endregion
 
                 // gather data from existing boids
                 var hashMapWriter = boidIndicesPerCell.AsParallelWriter();
-                var retrieveDataJobHandle = Entities.WithName("RetrieveDataJob")
+                var retrieveBoidDataJobHandle = Entities.WithName("RetrieveBoidDataJob")
                     .WithAll<Boid>()
                     .ForEach((int entityInQueryIndex, in LocalToWorld localToWorld) => {
 
@@ -91,6 +119,21 @@ namespace ColdShowerGames {
                     })
                     .ScheduleParallel(Dependency);
 
+                var retrieveTargetsDataJobHandle = Entities.WithName("RetrieveBoidTargetDataJob")
+                    .WithAll<BoidTarget>()
+                    .ForEach((
+                        int entityInQueryIndex,
+                        in LocalToWorld localToWorld,
+                        in BoidTarget boidTarget) => {
+
+                        targetPositions[entityInQueryIndex] = localToWorld.Position;
+                        targetAvoidanceRanges[entityInQueryIndex] = boidTarget.AvoidanceRadius;
+                    })
+                    .ScheduleParallel(Dependency);
+
+
+                var retrieveDataJobHandle =
+                    JobHandle.CombineDependencies(retrieveBoidDataJobHandle, retrieveTargetsDataJobHandle);
 
                 var createCellDataJobHandle = new MergeCells {
                     perBoidCellIndex = perBoidCellIndex,
@@ -98,13 +141,14 @@ namespace ColdShowerGames {
                     headings = headings,
                     positions = positions,
                     perCellHeadings = perCellHeadings,
-                    perCellPositions = perCellPositions
-
+                    perCellPositions = perCellPositions,
+                    targetPositions = targetPositions,
+                    perCellClosestTargetIndex = perCellClosestTargetIndex,
+                    perCellClosestTargetDistanceSq = perCellClosestTargetDistanceSq
                 }.Schedule(boidIndicesPerCell, 64, retrieveDataJobHandle);
 
 
                 // apply movement to the units
-                var type = boidType;
                 var applyMovementHandle = Entities.WithName("MoveBoidsJob")
                     .WithAll<Boid>()
                     .WithReadOnly(positions)
@@ -113,6 +157,10 @@ namespace ColdShowerGames {
                     .WithReadOnly(perCellHeadings)
                     .WithReadOnly(perBoidCellIndex)
                     .WithReadOnly(perCellCount)
+                    .WithReadOnly(targetPositions)
+                    .WithReadOnly(targetAvoidanceRanges)
+                    .WithReadOnly(perCellClosestTargetIndex)
+                    .WithReadOnly(perCellClosestTargetDistanceSq)
                     .ForEach((int entityInQueryIndex, ref LocalToWorld localToWorld) => {
 
                         var forward = headings[entityInQueryIndex];
@@ -150,15 +198,42 @@ namespace ColdShowerGames {
                                              math.normalizesafe(neighboursCenter - currentPosition);
                         }
 
+                        // -------------------- walk to targets
+                        var walkToTargetsResult = float3.zero;
+                        var closestTargetIndex = perCellClosestTargetIndex[cellIndex];
+                        if (closestTargetIndex != -1) {
+                            var closestTargetDistanceSq = perCellClosestTargetDistanceSq[cellIndex];
 
-                        var stayCenter = math.normalizesafe(-currentPosition) * .1f;
-                        
+                            var closestTargetPosition = targetPositions[closestTargetIndex];
+                            var targetAvoidDistance = targetAvoidanceRanges[closestTargetIndex];
+                            targetAvoidDistance *= targetAvoidDistance;
 
-                        var resultHeading =
-                            math.normalizesafe(cohesionResult + separationResult + alignmentResult + stayCenter);
-                        var nextHeading = math.normalizesafe(forward + dt * (resultHeading - forward));
-                        nextHeading = math.lerp(forward, nextHeading, .3f);
-                        
+
+                            // logic to avoid being close to target
+                            var distanceToTargetClamped = closestTargetDistanceSq / targetAvoidDistance;
+                            var needToAvoidTarget = math.max(1 - distanceToTargetClamped, 0);
+                            needToAvoidTarget *= needToAvoidTarget;
+
+                            if (needToAvoidTarget > 0) {
+                                walkToTargetsResult = boidType.TargetAvoidanceWeight *
+                                                      needToAvoidTarget *
+                                                      math.normalizesafe(currentPosition -
+                                                          closestTargetPosition);
+                            }
+                            else {
+                                walkToTargetsResult = boidType.TargetWeight *
+                                                      math.normalizesafe(closestTargetPosition -
+                                                          currentPosition);
+                            }
+                        }
+
+                        var resultHeading = cohesionResult +
+                                            separationResult +
+                                            alignmentResult +
+                                            walkToTargetsResult;
+                        var nextHeading = math.lerp(forward,
+                            math.normalizesafe(resultHeading),
+                            dt * boidType.TurnSpeed);
 
                         localToWorld = new LocalToWorld {
                             Value = float4x4.TRS(
@@ -169,6 +244,7 @@ namespace ColdShowerGames {
 
                     })
                     .ScheduleParallel(createCellDataJobHandle);
+
 
 
                 Dependency = applyMovementHandle;
@@ -184,6 +260,11 @@ namespace ColdShowerGames {
                 perCellCount.Dispose(Dependency);
                 perCellHeadings.Dispose(Dependency);
                 perCellPositions.Dispose(Dependency);
+
+                targetAvoidanceRanges.Dispose(Dependency);
+                targetPositions.Dispose(Dependency);
+                perCellClosestTargetIndex.Dispose(Dependency);
+                perCellClosestTargetDistanceSq.Dispose(Dependency);
 
 #endregion
             }
