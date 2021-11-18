@@ -90,6 +90,11 @@ namespace ColdShowerGames {
                     Allocator.TempJob,
                     NativeArrayOptions.UninitializedMemory);
 
+                // additional weights of targets
+                var targetsWeights = new NativeArray<float>(nrOfTargets,
+                    Allocator.TempJob,
+                    NativeArrayOptions.UninitializedMemory);
+
                 // per each cell, this is the position of the closes target
                 var perCellClosestTargetIndex = new NativeArray<int>(nrOfBoids,
                     Allocator.TempJob,
@@ -128,6 +133,7 @@ namespace ColdShowerGames {
 
                         targetPositions[entityInQueryIndex] = localToWorld.Position;
                         targetAvoidanceRanges[entityInQueryIndex] = boidTarget.AvoidanceRadius;
+                        targetsWeights[entityInQueryIndex] = boidTarget.Weight;
                     })
                     .ScheduleParallel(Dependency);
 
@@ -161,6 +167,7 @@ namespace ColdShowerGames {
                     .WithReadOnly(targetAvoidanceRanges)
                     .WithReadOnly(perCellClosestTargetIndex)
                     .WithReadOnly(perCellClosestTargetDistanceSq)
+                    .WithReadOnly(targetsWeights)
                     .ForEach((int entityInQueryIndex, ref LocalToWorld localToWorld) => {
 
                         var forward = headings[entityInQueryIndex];
@@ -216,12 +223,14 @@ namespace ColdShowerGames {
 
                             if (needToAvoidTarget > 0) {
                                 walkToTargetsResult = boidType.TargetAvoidanceWeight *
+                                                      targetsWeights[closestTargetIndex] *
                                                       needToAvoidTarget *
                                                       math.normalizesafe(currentPosition -
                                                           closestTargetPosition);
                             }
                             else {
                                 walkToTargetsResult = boidType.TargetWeight *
+                                                      targetsWeights[closestTargetIndex] *
                                                       math.normalizesafe(closestTargetPosition -
                                                           currentPosition);
                             }
@@ -231,9 +240,9 @@ namespace ColdShowerGames {
                                             separationResult +
                                             alignmentResult +
                                             walkToTargetsResult;
-                        var nextHeading = math.lerp(forward,
+                        var nextHeading = math.normalizesafe(math.lerp(forward,
                             math.normalizesafe(resultHeading),
-                            dt * boidType.TurnSpeed);
+                            dt * boidType.TurnSpeed));
 
                         localToWorld = new LocalToWorld {
                             Value = float4x4.TRS(
@@ -265,6 +274,7 @@ namespace ColdShowerGames {
                 targetPositions.Dispose(Dependency);
                 perCellClosestTargetIndex.Dispose(Dependency);
                 perCellClosestTargetDistanceSq.Dispose(Dependency);
+                targetsWeights.Dispose(Dependency);
 
 #endregion
             }

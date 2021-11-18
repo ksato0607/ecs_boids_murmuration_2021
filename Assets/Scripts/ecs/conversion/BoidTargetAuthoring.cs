@@ -2,6 +2,7 @@
 namespace ColdShowerGames {
     public class BoidTargetAuthoring : MonoBehaviour {
         public float AvoidanceRadius = 2f;
+        public float Weight = 1f;
 
         private void OnDrawGizmos() {
             Gizmos.color = Color.red;
@@ -17,7 +18,8 @@ namespace ColdShowerGames {
                 
                 DstEntityManager.AddComponentData(entity,
                     new BoidTarget() {
-                        AvoidanceRadius = input.AvoidanceRadius
+                        AvoidanceRadius = input.AvoidanceRadius,
+                        Weight = input.Weight
                     });
             });
         }
