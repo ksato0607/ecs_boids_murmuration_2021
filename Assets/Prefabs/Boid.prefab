@@ -101,7 +101,7 @@ MonoBehaviour:
   CohesionWeight: 0.5
   AlignmentWeight: 1
   TargetWeight: 1
-  TargetAvoidanceWeight: 4
-  ObstacleAversionDistance: 30
+  TargetAvoidanceWeight: 7
   MoveSpeed: 20
-  TurnSpeed: 3
+  TurnSpeed: 4
+  MaintainAvgYWeight: 3

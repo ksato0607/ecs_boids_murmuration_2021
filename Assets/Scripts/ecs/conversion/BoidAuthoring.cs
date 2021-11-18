@@ -9,9 +9,9 @@ namespace ColdShowerGames {
         public float AlignmentWeight = 1.0f;
         public float TargetWeight = 2.0f;
         public float TargetAvoidanceWeight = 2.0f;
-        public float ObstacleAversionDistance = 30.0f;
         public float MoveSpeed = 25.0f;
         public float TurnSpeed = .1f;
+        public float MaintainAvgYWeight = .5f;
     }
 
     public class BoidConversion : GameObjectConversionSystem {
@@ -30,9 +30,9 @@ namespace ColdShowerGames {
                         SeparationWeight = input.SeparationWeight,
                         TargetWeight = input.TargetWeight,
                         TargetAvoidanceWeight = input.TargetAvoidanceWeight,
-                        ObstacleAversionDistance = input.ObstacleAversionDistance,
                         Scale = localScale,
-                        TurnSpeed = input.TurnSpeed
+                        TurnSpeed = input.TurnSpeed,
+                        MaintainAvgYWeight = input.MaintainAvgYWeight
                     });
                 
                 

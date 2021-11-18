@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f99bef7028b04ca18dda09eee2f32d60, type: 3}
   m_Name: Flock Settings
   m_EditorClassIdentifier: 
-  unitSpeed: 0.5
   cellSizeMax: 5
   cellSizeMin: 3
-  cellSizeVarySpeed: 2
+  cellSizeVarySpeed: 10

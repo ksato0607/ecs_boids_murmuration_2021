@@ -9,9 +9,9 @@ namespace ColdShowerGames {
         public float AlignmentWeight;
         public float TargetWeight;
         public float TargetAvoidanceWeight;
-        public float ObstacleAversionDistance;
         public float MoveSpeed;
         public float TurnSpeed;
         public float3 Scale;
+        public float MaintainAvgYWeight;
     }
 }

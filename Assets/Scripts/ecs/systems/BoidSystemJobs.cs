@@ -5,14 +5,15 @@ using Unity.Mathematics;
 using UnityEngine;
 namespace ColdShowerGames {
 
-    public struct CopyAllPositions : IJob {
+    public struct AverageAllPositions : IJob {
         [ReadOnly]
         public NativeArray<float3> elementsToAdd;
         public NativeElement<float3> result;
 
         public void Execute() {
+            var count = elementsToAdd.Length;
             foreach (var t in elementsToAdd) {
-                result.Value += t;
+                result.Value += t / count;
             }
         }
     }
@@ -58,14 +59,6 @@ namespace ColdShowerGames {
 
         // Resolves the distance of the nearest obstacle and target and stores the cell index.
         public void ExecuteFirst(int index) {
-            // var position = cellSeparation[index] / cellCount[index];
-
-            // int obstaclePositionIndex;
-            // float obstacleDistance;
-            // NearestPosition(obstaclePositions, position, out obstaclePositionIndex, out obstacleDistance);
-            // cellObstaclePositionIndex[index] = obstaclePositionIndex;
-            // cellObstacleDistance[index] = obstacleDistance;
-            //
             if (targetPositions.Length != 0) {
                 NearestPosition(targetPositions,
                     positions[index],

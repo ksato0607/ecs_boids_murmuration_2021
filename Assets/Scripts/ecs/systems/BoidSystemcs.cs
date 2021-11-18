@@ -105,6 +105,9 @@ namespace ColdShowerGames {
                     Allocator.TempJob,
                     NativeArrayOptions.UninitializedMemory);
 
+                // average position of all boids
+                var avgPosition = new NativeElement<float3>(float3.zero, Allocator.TempJob);
+
   #endregion
 
                 // gather data from existing boids
@@ -124,6 +127,12 @@ namespace ColdShowerGames {
                     })
                     .ScheduleParallel(Dependency);
 
+                var averageAllPositionsJobHandle = new AverageAllPositions {
+                    result = avgPosition,
+                    elementsToAdd = positions
+                }.Schedule(retrieveBoidDataJobHandle);
+
+
                 var retrieveTargetsDataJobHandle = Entities.WithName("RetrieveBoidTargetDataJob")
                     .WithAll<BoidTarget>()
                     .ForEach((
@@ -138,8 +147,9 @@ namespace ColdShowerGames {
                     .ScheduleParallel(Dependency);
 
 
-                var retrieveDataJobHandle =
-                    JobHandle.CombineDependencies(retrieveBoidDataJobHandle, retrieveTargetsDataJobHandle);
+                var retrieveDataJobHandle = JobHandle.CombineDependencies(retrieveBoidDataJobHandle,
+                    retrieveTargetsDataJobHandle,
+                    averageAllPositionsJobHandle);
 
                 var createCellDataJobHandle = new MergeCells {
                     perBoidCellIndex = perBoidCellIndex,
@@ -186,10 +196,10 @@ namespace ColdShowerGames {
                         // -------------------- alignment
                         var alignmentResult = boidType.AlignmentWeight * neighboursHeading;
 
-                        // -------------------- separation and cohesion
+                        // -------------------- separation  and  cohesion  and  maintain same Y
                         var separationResult = float3.zero;
                         var cohesionResult = float3.zero;
-
+                        var maintainSameYResult = float3.zero;
                         if (neighboursCount > 0) {
                             var distanceToMiddle = math.distancesq(neighboursCenter, currentPosition);
                             var maxDistanceToMiddle = (cellRadius + boidType.AddedCellRadius) *
@@ -201,8 +211,14 @@ namespace ColdShowerGames {
                             separationResult = boidType.SeparationWeight *
                                                needToLeave *
                                                math.normalizesafe(currentPosition - neighboursCenter);
-                            cohesionResult = boidType.CohesionWeight *
-                                             math.normalizesafe(neighboursCenter - currentPosition);
+
+
+                            var toCenterOfNeighbours = math.normalizesafe(neighboursCenter - currentPosition);
+                            cohesionResult = boidType.CohesionWeight * toCenterOfNeighbours;
+                            maintainSameYResult = boidType.MaintainAvgYWeight *
+                                                  math.normalizesafe(new float3(0,
+                                                      toCenterOfNeighbours.y,
+                                                      0));
                         }
 
                         // -------------------- walk to targets
@@ -236,12 +252,17 @@ namespace ColdShowerGames {
                             }
                         }
 
-                        var resultHeading = cohesionResult +
-                                            separationResult +
-                                            alignmentResult +
-                                            walkToTargetsResult;
+
+
+
+                        var resultHeading = math.normalizesafe(cohesionResult +
+                                                               separationResult +
+                                                               alignmentResult +
+                                                               walkToTargetsResult +
+                                                               maintainSameYResult);
+
                         var nextHeading = math.normalizesafe(math.lerp(forward,
-                            math.normalizesafe(resultHeading),
+                            resultHeading,
                             dt * boidType.TurnSpeed));
 
                         localToWorld = new LocalToWorld {
@@ -275,6 +296,8 @@ namespace ColdShowerGames {
                 perCellClosestTargetIndex.Dispose(Dependency);
                 perCellClosestTargetDistanceSq.Dispose(Dependency);
                 targetsWeights.Dispose(Dependency);
+
+                avgPosition.Dispose(Dependency);
 
 #endregion
             }
