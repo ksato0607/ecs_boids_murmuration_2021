@@ -97,11 +97,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   AddedCellRadius: 1
-  SeparationWeight: 3
-  CohesionWeight: 0.5
-  AlignmentWeight: 1
-  TargetWeight: 1
-  TargetAvoidanceWeight: 7
-  MoveSpeed: 20
+  SeparationWeight: 8
+  CohesionWeight: 2
+  AlignmentWeight: 2
+  TargetWeight: 10
+  TargetAvoidanceWeight: 2
+  MoveSpeed: 40
   TurnSpeed: 4
-  MaintainAvgYWeight: 3
+  MaintainAvgYWeight: 5
