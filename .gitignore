@@ -56,3 +56,8 @@ sysinfo.txt
 !/Assets/Plugins/Debugging Essentials/*
 /Assets/EMX/HierarchyPro/Editor/_SAVED_DATA/.EditorSettings/*
 /Assets/EMX/HierarchyPro/Editor/_SAVED_DATA/*
+
+# Recordings
+/Recordings
+
+.DS_Store
