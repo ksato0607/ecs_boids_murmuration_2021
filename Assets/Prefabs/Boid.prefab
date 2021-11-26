@@ -102,6 +102,6 @@ MonoBehaviour:
   AlignmentWeight: 20
   TargetWeight: 5
   TargetAvoidanceWeight: 20
-  MoveSpeed: 40
+  MoveSpeed: 60
   TurnSpeed: 4
   MaintainAvgYWeight: 50
