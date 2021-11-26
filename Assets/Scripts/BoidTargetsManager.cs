@@ -5,12 +5,6 @@ using Unity.Transforms;
 using UnityEngine;
 namespace ColdShowerGames {
     public class BoidTargetsManager : MonoBehaviour {
-
-        [SerializeField]
-        private List<Transform> initialTargets = new();
-        [SerializeField]
-        private float initialTargetsWeight = 1f, initialTargetsAvoidanceRadius = 2f;
-
         private Dictionary<Transform, Entity> targets = new();
         private EntityManager _entityManager;
         private EntityArchetype _entityArchetype;
@@ -19,8 +13,6 @@ namespace ColdShowerGames {
             _entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
             _entityArchetype = _entityManager.CreateArchetype(ComponentType.ReadOnly<BoidTarget>(),
                 ComponentType.ReadWrite<LocalToWorld>());
-            
-            initialTargets.ForEach(trans => AddTarget(trans, initialTargetsWeight, initialTargetsAvoidanceRadius));
         }
 
         private void Update() {
@@ -38,7 +30,7 @@ namespace ColdShowerGames {
         /// <param name="targetTrans">The target to follow</param>
         /// <param name="weight">How should the boids prioritize following this target. (1 = default behavior)</param>
         /// <param name="avoidanceRadius">The distance for the boids to keep away from the target.</param>
-        public void AddTarget(Transform targetTrans, float weight = 1, float avoidanceRadius = 2f) {
+        public void AddTarget(Transform targetTrans, float weight, float avoidanceRadius) {
             var entity = _entityManager.CreateEntity(_entityArchetype);
 
             _entityManager.AddComponentData(entity,
@@ -57,9 +49,17 @@ namespace ColdShowerGames {
         /// Remove a target for the boids to follow.
         /// </summary>
         public void RemoveTarget(Transform targetTrans) {
+            if (World.DefaultGameObjectInjectionWorld is null) return;
+
             var entity = targets[targetTrans];
-            _entityManager.DestroyEntity(entity);
+            if (World.DefaultGameObjectInjectionWorld.IsCreated) {
+                _entityManager.DestroyEntity(entity);
+            }
             targets.Remove(targetTrans);
+        }
+
+        private void OnDrawGizmosSelected() {
+            Gizmos.color = Color.gray;
         }
     }
 }
