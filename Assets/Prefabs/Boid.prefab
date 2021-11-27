@@ -97,7 +97,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   AddedCellRadius: 1
-  SeparationWeight: 80
+  SeparationWeight: 60
   CohesionWeight: 20
   AlignmentWeight: 20
   TargetWeight: 5
